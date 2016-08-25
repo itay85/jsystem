@@ -32,7 +32,7 @@ class DifidoConfig {
 	}
 
 	private DifidoConfig() {
-		File configFile = new File(FILE_NAME);
+		File configFile = new File(System.getProperty("user.dir"), FILE_NAME);
 		if (!configFile.exists()) {
 			createDefaultConfigFile();
 		}
@@ -41,7 +41,7 @@ class DifidoConfig {
 
 	private void readConfigFile() {
 		properties = new Properties();
-		try (FileInputStream in = new FileInputStream(FILE_NAME)) {
+		try (FileInputStream in = new FileInputStream(new File(System.getProperty("user.dir"), FILE_NAME))) {
 			properties.load(in);
 		} catch (IOException e) {
 			log.warning("Failed to read Difido configuration file");
@@ -53,7 +53,7 @@ class DifidoConfig {
 		for (DifidoProperty prop : DifidoProperty.values()) {
 			properties.setProperty(prop.propName, prop.defaultValue != null ? prop.defaultValue.toString() : "");
 		}
-		try (FileOutputStream out = new FileOutputStream(FILE_NAME)) {
+		try (FileOutputStream out = new FileOutputStream(new File(System.getProperty("user.dir"), FILE_NAME))) {
 			properties.store(out, "Difido report properties");
 
 		} catch (IOException e) {
@@ -94,8 +94,23 @@ class DifidoConfig {
 		return Boolean.parseBoolean(value);
 	}
 
+	long getLong(DifidoProperty property) {
+		String value = getString(property);
+		long longValue = 0;
+		try {
+			longValue = Long.parseLong(value);
+		} catch (Throwable t) {
+		}
+		return longValue;
+	}
+
 	enum DifidoProperty {
-		errorsToFailures("errors.to.failures", "false", "Replace each error with failure");
+
+		// @formatter:off
+		ERRORS_TO_FAILURES("errors.to.failures", "false", "Replace each error with failure"),
+		MIN_INTERVAL_BETWEEN_MESSAGES("min.interval.between.messages", "100",
+						"The min allowed interval between message in millis");
+		// @formatter:on
 
 		private String propName;
 

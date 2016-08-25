@@ -35,7 +35,9 @@ import jsystem.framework.report.Reporter.EnumReportLevel;
 import jsystem.framework.report.Summary;
 import jsystem.framework.report.TestInfo;
 import jsystem.framework.scenario.JTestContainer;
+import jsystem.framework.scenario.Scenario;
 import jsystem.framework.scenario.ScenarioHelpers;
+import jsystem.framework.scenario.ScenariosManager;
 import jsystem.framework.scenario.flow_control.AntFlowControl;
 import jsystem.framework.scenario.flow_control.AntForLoop;
 import jsystem.utils.StringUtils;
@@ -76,6 +78,8 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 	private String executionUid;
 
 	private boolean firstTest = true;
+
+	private long lastMessageTime;
 
 	protected abstract void writeTestDetails(TestDetails testDetails);
 
@@ -169,6 +173,13 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 			element.setType(ElementType.regular);
 		}
 		testDetails.addReportElement(element);
+		if (System.currentTimeMillis() - lastMessageTime <= DifidoConfig.getInstance()
+				.getLong(DifidoProperty.MIN_INTERVAL_BETWEEN_MESSAGES)) {
+			// We want to make sure the test does not stress the IO with
+			// messages. Issue #271
+			return;
+		}
+		lastMessageTime = System.currentTimeMillis();
 		writeTestDetails(testDetails);
 
 	}
@@ -254,6 +265,18 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 
 	}
 
+	protected int calculateNumberOfPlannedTests() {
+		final Scenario scenario = ScenariosManager.getInstance().getCurrentScenario();
+		if (null == scenario) {
+			return 0;
+		}
+		int[] enabledTestsIds = scenario.getEnabledTestsIndexes();
+		if (null == enabledTestsIds) {
+			return 0; 
+		}
+		return enabledTestsIds.length;
+	}
+
 	private void updateIndex() {
 		if (null == execution) {
 			index = 0;
@@ -285,7 +308,7 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 	@Override
 	public void addError(Test arg0, Throwable arg1) {
 		log.fine("Received error event");
-		if (DifidoConfig.getInstance().getBoolean(DifidoProperty.errorsToFailures)) {
+		if (DifidoConfig.getInstance().getBoolean(DifidoProperty.ERRORS_TO_FAILURES)) {
 			// We don't want errors in the report, so we will change each error
 			// to failure.
 			currentTest.setStatus(Status.failure);
@@ -333,7 +356,6 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 			firstTest = false;
 			startRun();
 		}
-
 		log.fine("Recieved start test event");
 		specialReportsElementsHandler = new SpecialReportElementsHandler();
 		String testName = testInfo.meaningfulName;
@@ -348,6 +370,7 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 		}
 		log.fine("Test name is " + testName);
 		currentTest = new TestNode(index++, testName, executionUid + "-" + index);
+		currentTest.setClassName(testInfo.className);
 		testStartTime = System.currentTimeMillis();
 		currentTest.setTimestamp(TIME_FORMAT.format(new Date(testStartTime)));
 		currentScenario.addChild(currentTest);
@@ -402,7 +425,7 @@ public abstract class AbstractHtmlReporter implements ExtendLevelTestReporter, E
 	 * This method is meant to be override. It is called at the start of the run
 	 */
 	public void startRun() {
-
+		execution.getLastMachine().setPlannedTests(calculateNumberOfPlannedTests());
 	}
 
 	/**
